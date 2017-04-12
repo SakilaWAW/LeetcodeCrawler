@@ -9,6 +9,9 @@ Q & A:
 1. Max retries exceeded with url-同一ip短时间内请求次数太多,服务器会拒绝请求.等一段时间即可.
 2. 正则表达式出现换行符无法匹配的问题,用.在默认情况下是不匹配换行的,要用[\s\S]*的形式才可以,使用
 的时候记得不要用raw字符串!
+3. 出现遍历时候删除列表项不正确的情况,因为删除元素会造成长度改变,会出问题.筛选条件简单的时候尽量用
+filter(lambda表达式)或者列表推导式来写会比较好.筛选条件复杂的时候可以考虑用列表将要删元素存起来,
+最后一起删除.
 
 TIPS:
 1. TrueOutput if Expression else falseOutput 三元表达式写法.
@@ -49,12 +52,23 @@ class Crawler:
         去掉提交代码列表中的重复部分
         :return: 返回一个无重复项且每个题目运行速度最快的列表
         """
-        submission_list.sort(key=lambda submission: self.__turn_runtime(submission['runtime']))
-        print(submission_list)
-        #submission_list
-        for index in range(len(submission_list)):
-            title = submission_list[index]['title']
-
+        submission_list.sort(key=lambda submission_info: self.__turn_runtime(submission_info['runtime']))
+        temp_title_list = []
+        temp_del_list = []
+        for submission in submission_list[:]:
+            title = submission['title']
+            runtime = submission['runtime']
+            if runtime == 'N/A':
+                del submission_list[submission_list.index(submission):]
+                break
+            elif title in temp_title_list:
+                temp_del_list.append(submission)
+            else:
+                temp_title_list.append(title)
+        for del_submission in temp_del_list[:]:
+            del submission_list[submission_list.index(del_submission)]
+        for submission in submission_list[:]:
+            print(submission['title'], ':', submission['runtime'])
 
     @staticmethod
     def __turn_runtime(runtime):
@@ -136,3 +150,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+
