@@ -51,6 +51,10 @@ class Crawler:
         """
         submission_list.sort(key=lambda submission: self.__turn_runtime(submission['runtime']))
         print(submission_list)
+        #submission_list
+        for index in range(len(submission_list)):
+            title = submission_list[index]['title']
+
 
     @staticmethod
     def __turn_runtime(runtime):
