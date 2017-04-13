@@ -25,6 +25,7 @@ TIPS:
 
 TODO:
 1. post请求405问题
+2. 如何避免js中的特殊字符
 """
 
 
@@ -34,6 +35,7 @@ class Crawler:
     SUBMISSIONS_LIST_JSON_REQUEST_URL = 'https://leetcode.com/api/submissions/'
     SESSION_MANAGE_URL = 'https://leetcode.com/session/'
     SUBMISSION_PAGE_BASE_URL = 'https://leetcode.com'
+    ROOT_PATH = os.getcwd()
 
     def __init__(self):
         self.session = requests.session()
@@ -59,16 +61,12 @@ class Crawler:
                      'login': 'SakilaWAW',
                      'password': 'Greedisgood'
                      }
-        response = ''
-        while response == '':
-            try:
-                response = self.session.post(self.LOGIN_URL,
-                                             headers={'Referer': 'https://leetcode.com/accounts/login/'},
-                                             data=login_msg)
-            except requests.exceptions.ConnectionError:
-                print('request refused by server.', 'sleep 5 seconds')
-                time.sleep(5)
-                continue
+        try:
+            response = self.session.post(self.LOGIN_URL,
+                                         headers={'Referer': 'https://leetcode.com/accounts/login/'},
+                                         data=login_msg)
+        except requests.exceptions.ConnectionError:
+            print('request refused by server.')
         print('登录返回码:', response.status_code)
 
     def __get_csrf_code_from_login_page(self):
@@ -126,33 +124,41 @@ class Crawler:
         根据url获得代码并保存到文件
         :param submission_url: 提交代码地址 
         """
+        print(threading.current_thread(), "开始进程")
         self.__check_status_and_login()
         submission_page = self.session.get(self.SUBMISSION_PAGE_BASE_URL+submission_url,
                                            headers={'Referer': 'https://leetcode.com/submissions/'}
                                            )
-        submission_code = self.__crawl_submission_code_from_page_source_code(submission_page.
-                                                                             text.encode(submission_page.encoding).
-                                                                             decode('utf-8'))
+        submission_code = self.__get_submission_code_from_page_source_code(submission_page.
+                                                                           text.encode(submission_page.encoding).
+                                                                           decode('utf-8'))
         self.__save_submission_code_to_file(submission_code)
 
     @staticmethod
-    def __crawl_submission_code_from_page_source_code(page_source_code):
+    def __get_submission_code_from_page_source_code(page_source_code):
         """
         从网页源码中获得已提交的代码
         """
-        print(page_source_code)
         code = re.search("submissionCode: '([\s\S]*)editCodeUrl:", page_source_code)
-        submission_info = code.group(0)\
-            .replace("submissionCode: '", "")
+        replace_dic = {"submissionCode: '": "",
+                       r"\u000A": "\n", r"\u000D": "\r", r"\u0009": "\t", r"\u003D": "=",
+                       r"\u003B": ";", r"\u003C": "<", r"\u0026": "&", r"\u0027": "'",
+                       r"\u002D": "-", r"\u003E": ">", r"\u0022": "\"", r"\u005C": "\\"}
+        submission_info = code.group(0)
+        for key in replace_dic:
+            submission_info = submission_info.replace(key, replace_dic[key])
         submission_info = re.sub('}\',(\s)*?editCodeUrl:', '', submission_info)
         return submission_info
 
-    @staticmethod
-    def __save_submission_code_to_file(submission_code):
-        os.mkdir('~/.mysubcode')
-        f = open('~/.mysubcode'+threading.current_thread().name, 'w')
+    def __save_submission_code_to_file(self, submission_code):
+        submission_file_dir = self.ROOT_PATH + '/.submission_files/'
+        if not os.path.exists(submission_file_dir):
+            os.mkdir(submission_file_dir)
+        file_name = submission_file_dir + threading.current_thread().name
+        f = open(file_name, 'w')
         try:
             f.write(submission_code)
+            print(threading.current_thread(), '写入完成')
         finally:
             f.close()
 
