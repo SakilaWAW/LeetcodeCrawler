@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import re
+import threading
 
 """
 Q & A:
@@ -12,6 +13,9 @@ Q & A:
 3. 出现遍历时候删除列表项不正确的情况,因为删除元素会造成长度改变,会出问题.筛选条件简单的时候尽量用
 filter(lambda表达式)或者列表推导式来写会比较好.筛选条件复杂的时候可以考虑用列表将要删元素存起来,
 最后一起删除.
+4. 使用多线程的时候出现只能启动单子线程的情况,注意区分threading.join()和setDaemon()的用法!
+t1.join()<==>wait_until_finish(t1),会阻断当前程序,t1.setDaemon(True)意味着当前线程完成后,
+t1将被强制终止.
 
 TIPS:
 1. TrueOutput if Expression else falseOutput 三元表达式写法.
@@ -28,7 +32,7 @@ class Crawler:
     SUBMISSIONS_DIR_URL = 'https://leetcode.com/submissions/'
     SUBMISSIONS_LIST_JSON_REQUEST_URL = 'https://leetcode.com/api/submissions/'
     SESSION_MANAGE_URL = 'https://leetcode.com/session/'
-    SUBMISSION_PAGE_BASE_URL = 'https://leetcode.com/submissions/detail/'
+    SUBMISSION_PAGE_BASE_URL = 'https://leetcode.com'
 
     def __init__(self):
         self.session = requests.session()
@@ -39,8 +43,21 @@ class Crawler:
         :return 返回内容待定
         """
         self.__check_status_and_login()
-        submissions_catalog = self.__get_submission_catalog_dict()
-        self.__filter(submissions_catalog['submissions_dump'])
+        submissions_catalog = self.__get_submission_catalog_dict()['submissions_dump']
+        self.__filter(submissions_catalog)
+        self.__get_submission_code_as_file(submissions_catalog)
+
+    def __get_submission_code_as_file(self, submission_catalog):
+        """
+        :param submission_catalog: 提交答案概览 
+        """
+        threads = []
+        for submission in submission_catalog[:]:
+            submission_thread = threading.Thread(target=self.__get_page_by_submission_url,
+                                                 args=(submission['url'],))
+            threads.append(submission_thread)
+        for t in threads:
+            t.start()
 
     def __get_submission_catalog_dict(self):
         payload = {'offset': 0, 'limit': 100}
@@ -50,7 +67,7 @@ class Crawler:
     def __filter(self, submission_list):
         """
         去掉提交代码列表中的重复部分
-        :return: 返回一个无重复项且每个题目运行速度最快的列表
+        submission_list会直接被更改
         """
         submission_list.sort(key=lambda submission_info: self.__turn_runtime(submission_info['runtime']))
         temp_title_list = []
@@ -67,19 +84,21 @@ class Crawler:
                 temp_title_list.append(title)
         for del_submission in temp_del_list[:]:
             del submission_list[submission_list.index(del_submission)]
-        for submission in submission_list[:]:
-            print(submission['title'], ':', submission['runtime'])
 
     @staticmethod
     def __turn_runtime(runtime):
         return int(runtime.replace('ms', '')) if runtime != 'N/A' else 10000
 
-    def __get_page_by_submission_id(self, submission_id):
+    def __get_page_by_submission_url(self, submission_url):
+        print("开始获得", submission_url, "的提交代码")
         self.__check_status_and_login()
-        submission_page = self.session.get(self.SUBMISSION_PAGE_BASE_URL+submission_id,
+        submission_page = self.session.get(self.SUBMISSION_PAGE_BASE_URL+submission_url,
                                            headers={'Referer': 'https://leetcode.com/submissions/'}
                                            )
-        return self.__get_code_from_data(submission_page.text.encode(submission_page.encoding).decode('utf-8'))
+        print("当前线程:", threading.current_thread().name)
+        self.__get_code_from_page_source_code(submission_page.
+                                              text.encode(submission_page.encoding).decode('utf-8'))
+        print("当前所有线程:", threading.enumerate())
 
     def __check_status_and_login(self):
         if requests.utils.dict_from_cookiejar(self.session.cookies) == {}:
@@ -109,8 +128,12 @@ class Crawler:
         return soup.input['value']
 
     @staticmethod
-    def __get_code_from_data(str_data):
-        code = re.search("submissionData:([\s\S]*)nonSufficientMsg:", str_data)
+    def __get_code_from_page_source_code(page_source_code):
+        """
+        TODO
+        从网页源码中获得已提交的代码
+        """
+        code = re.search("submissionData:([\s\S]*)nonSufficientMsg:", page_source_code)
         dict_str = code.group(0).replace('nonSufficientMsg:', '}')
         dict_str = dict_str.replace('submissionData: ', '{submissionData: ')
         return dict_str
