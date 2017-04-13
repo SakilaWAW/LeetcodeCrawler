@@ -1,4 +1,6 @@
 
+#generated submission files
+thread-(\d)*
 .idea
 *.py[cod]
 *.so
