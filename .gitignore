@@ -1,6 +1,8 @@
 
 #generated submission files
 thread-(\d)*
+.submission_files
+
 .idea
 *.py[cod]
 *.so
