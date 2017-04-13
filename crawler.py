@@ -4,12 +4,13 @@ from bs4 import BeautifulSoup
 import time
 import re
 import threading
+import os
 
 """
 Q & A:
 1. Max retries exceeded with url-同一ip短时间内请求次数太多,服务器会拒绝请求.等一段时间即可.
-2. 正则表达式出现换行符无法匹配的问题,用.在默认情况下是不匹配换行的,要用[\s\S]*的形式才可以,使用
-的时候记得不要用raw字符串!
+2. 正则表达式出现换行符无法匹配的问题,用.在默认情况下是不匹配换行的,要用[\s\S]*的形式才可以.使用
+的时候分清r''是指python字符串的raw,和正则表达式无关!
 3. 出现遍历时候删除列表项不正确的情况,因为删除元素会造成长度改变,会出问题.筛选条件简单的时候尽量用
 filter(lambda表达式)或者列表推导式来写会比较好.筛选条件复杂的时候可以考虑用列表将要删元素存起来,
 最后一起删除.
@@ -40,65 +41,13 @@ class Crawler:
     def get_all_submission(self):
         """
         对外接口1:获得所有submission
+        登录->得到提交目录->筛选目录->通过目录存代码到文件
         :return 返回内容待定
         """
         self.__check_status_and_login()
         submissions_catalog = self.__get_submission_catalog_dict()['submissions_dump']
         self.__filter(submissions_catalog)
-        self.__get_submission_code_as_file(submissions_catalog)
-
-    def __get_submission_code_as_file(self, submission_catalog):
-        """
-        :param submission_catalog: 提交答案概览 
-        """
-        threads = []
-        for submission in submission_catalog[:]:
-            submission_thread = threading.Thread(target=self.__get_page_by_submission_url,
-                                                 args=(submission['url'],))
-            threads.append(submission_thread)
-        for t in threads:
-            t.start()
-
-    def __get_submission_catalog_dict(self):
-        payload = {'offset': 0, 'limit': 100}
-        submission_dir_page = self.session.get(self.SUBMISSIONS_LIST_JSON_REQUEST_URL, params=payload)
-        return eval(submission_dir_page.text.replace('true', 'True').replace('false', 'False'))
-
-    def __filter(self, submission_list):
-        """
-        去掉提交代码列表中的重复部分
-        submission_list会直接被更改
-        """
-        submission_list.sort(key=lambda submission_info: self.__turn_runtime(submission_info['runtime']))
-        temp_title_list = []
-        temp_del_list = []
-        for submission in submission_list[:]:
-            title = submission['title']
-            runtime = submission['runtime']
-            if runtime == 'N/A':
-                del submission_list[submission_list.index(submission):]
-                break
-            elif title in temp_title_list:
-                temp_del_list.append(submission)
-            else:
-                temp_title_list.append(title)
-        for del_submission in temp_del_list[:]:
-            del submission_list[submission_list.index(del_submission)]
-
-    @staticmethod
-    def __turn_runtime(runtime):
-        return int(runtime.replace('ms', '')) if runtime != 'N/A' else 10000
-
-    def __get_page_by_submission_url(self, submission_url):
-        print("开始获得", submission_url, "的提交代码")
-        self.__check_status_and_login()
-        submission_page = self.session.get(self.SUBMISSION_PAGE_BASE_URL+submission_url,
-                                           headers={'Referer': 'https://leetcode.com/submissions/'}
-                                           )
-        print("当前线程:", threading.current_thread().name)
-        self.__get_code_from_page_source_code(submission_page.
-                                              text.encode(submission_page.encoding).decode('utf-8'))
-        print("当前所有线程:", threading.enumerate())
+        self.__crawl_and_save_submission_info_as_file_by_list(submissions_catalog)
 
     def __check_status_and_login(self):
         if requests.utils.dict_from_cookiejar(self.session.cookies) == {}:
@@ -127,16 +76,85 @@ class Crawler:
         soup = BeautifulSoup(login_page.text, 'html.parser')
         return soup.input['value']
 
-    @staticmethod
-    def __get_code_from_page_source_code(page_source_code):
+    def __get_submission_catalog_dict(self):
+        payload = {'offset': 0, 'limit': 100}
+        submission_dir_page = self.session.get(self.SUBMISSIONS_LIST_JSON_REQUEST_URL, params=payload)
+        return eval(submission_dir_page.text.replace('true', 'True').replace('false', 'False'))
+
+    def __filter(self, submission_list):
         """
-        TODO
+        去掉提交代码列表中的重复部分
+        submission_list会直接被更改
+        """
+        submission_list.sort(key=lambda submission_info: self.__format_runtime(submission_info['runtime']))
+        temp_title_list = []
+        temp_del_list = []
+        for submission in submission_list[:]:
+            title = submission['title']
+            runtime = submission['runtime']
+            if runtime == 'N/A':
+                del submission_list[submission_list.index(submission):]
+                break
+            elif title in temp_title_list:
+                temp_del_list.append(submission)
+            else:
+                temp_title_list.append(title)
+        for del_submission in temp_del_list[:]:
+            del submission_list[submission_list.index(del_submission)]
+
+    @staticmethod
+    def __format_runtime(runtime):
+        return int(runtime.replace('ms', '')) if runtime != 'N/A' else 10000
+
+    def __crawl_and_save_submission_info_as_file_by_list(self, submission_catalog):
+        """
+        通过提交概览表将提交代码多线程下载下来并存到文件
+        1.下载
+        2.存到文件
+        :param submission_catalog: 提交答案概览 
+        """
+        threads = []
+        for submission in submission_catalog[:]:
+            submission_thread = threading.Thread(target=self.__crawl_and_save_submission_info_as_file_by_url,
+                                                 args=(submission['url'],))
+            threads.append(submission_thread)
+        for t in threads:
+            t.start()
+
+    def __crawl_and_save_submission_info_as_file_by_url(self, submission_url):
+        """
+        根据url获得代码并保存到文件
+        :param submission_url: 提交代码地址 
+        """
+        self.__check_status_and_login()
+        submission_page = self.session.get(self.SUBMISSION_PAGE_BASE_URL+submission_url,
+                                           headers={'Referer': 'https://leetcode.com/submissions/'}
+                                           )
+        submission_code = self.__crawl_submission_code_from_page_source_code(submission_page.
+                                                                             text.encode(submission_page.encoding).
+                                                                             decode('utf-8'))
+        self.__save_submission_code_to_file(submission_code)
+
+    @staticmethod
+    def __crawl_submission_code_from_page_source_code(page_source_code):
+        """
         从网页源码中获得已提交的代码
         """
-        code = re.search("submissionData:([\s\S]*)nonSufficientMsg:", page_source_code)
-        dict_str = code.group(0).replace('nonSufficientMsg:', '}')
-        dict_str = dict_str.replace('submissionData: ', '{submissionData: ')
-        return dict_str
+        print(page_source_code)
+        code = re.search("submissionCode: '([\s\S]*)editCodeUrl:", page_source_code)
+        submission_info = code.group(0)\
+            .replace("submissionCode: '", "")
+        submission_info = re.sub('}\',(\s)*?editCodeUrl:', '', submission_info)
+        return submission_info
+
+    @staticmethod
+    def __save_submission_code_to_file(submission_code):
+        os.mkdir('~/.mysubcode')
+        f = open('~/.mysubcode'+threading.current_thread().name, 'w')
+        try:
+            f.write(submission_code)
+        finally:
+            f.close()
 
 '''
 def get_submission_count_request_cookie():
