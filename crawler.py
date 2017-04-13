@@ -26,6 +26,7 @@ TIPS:
 TODO:
 1. post请求405问题
 2. 如何避免js中的特殊字符
+3. requests.exceptions.ConnectionError: HTTPSConnectionPool如何解决
 """
 
 
@@ -64,7 +65,8 @@ class Crawler:
         try:
             response = self.session.post(self.LOGIN_URL,
                                          headers={'Referer': 'https://leetcode.com/accounts/login/'},
-                                         data=login_msg)
+                                         data=login_msg,
+                                         verify=False)
         except requests.exceptions.ConnectionError:
             print('request refused by server.')
         print('登录返回码:', response.status_code)
@@ -127,7 +129,7 @@ class Crawler:
         print(threading.current_thread(), "开始进程")
         self.__check_status_and_login()
         submission_page = self.session.get(self.SUBMISSION_PAGE_BASE_URL+submission_url,
-                                           headers={'Referer': 'https://leetcode.com/submissions/'}
+                                           headers={'Referer': 'https://leetcode.com/submissions/'},
                                            )
         submission_code = self.__get_submission_code_from_page_source_code(submission_page.
                                                                            text.encode(submission_page.encoding).
