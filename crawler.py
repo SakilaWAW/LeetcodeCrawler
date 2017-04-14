@@ -18,7 +18,7 @@ filter(lambda表达式)或者列表推导式来写会比较好.筛选条件复�
 t1.join()<==>wait_until_finish(t1),会阻断当前程序,t1.setDaemon(True)意味着当前线程完成后,
 t1将被强制终止.
 5. 在使用多线程做requests请求的时候,请求速度太快可能会被网站认为是非法访问,用在线程开启后time.sleep()
-可以避免这个问题.
+可以避免这个问题.??可能??
 
 TIPS:
 1. TrueOutput if Expression else falseOutput 三元表达式写法.
@@ -38,9 +38,14 @@ class Crawler:
     SUBMISSIONS_LIST_JSON_REQUEST_URL = 'https://leetcode.com/api/submissions/'
     SESSION_MANAGE_URL = 'https://leetcode.com/session/'
     SUBMISSION_PAGE_BASE_URL = 'https://leetcode.com'
+
+    TYPE_INCREAMENT = 0
+    TYPE_FULL_SCALE = 1
+
+
     ROOT_PATH = os.getcwd()
 
-    def __init__(self):
+    def __init__(self, crawl_type=TYPE_INCREAMENT):
         self.session = requests.session()
 
     def get_all_submission(self):
@@ -50,7 +55,7 @@ class Crawler:
         :return 返回内容待定
         """
         self.__check_status_and_login()
-        submissions_catalog = self.__get_submission_catalog_dict()['submissions_dump']
+        submissions_catalog = self.__get_submission_catalog()
         self.__filter(submissions_catalog)
         self.__crawl_and_save_submission_info_as_file_by_list(submissions_catalog)
 
@@ -78,14 +83,15 @@ class Crawler:
         soup = BeautifulSoup(login_page.text, 'html.parser')
         return soup.input['value']
 
-    def __get_submission_catalog_dict(self):
+    def __get_submission_catalog(self):
         payload = {'offset': 0, 'limit': 100}
         submission_dir_page = self.session.get(self.SUBMISSIONS_LIST_JSON_REQUEST_URL, params=payload)
-        return eval(submission_dir_page.text.replace('true', 'True').replace('false', 'False'))
+        print(submission_dir_page.text)
+        return eval(submission_dir_page.text.replace('true', 'True').replace('false', 'False'))['submissions_dump']
 
     def __filter(self, submission_list):
         """
-        去掉提交代码列表中的重复部分
+        去掉提交代码列表中的重复部分和失败代码部分并且进行排序
         submission_list会直接被更改
         """
         submission_list.sort(key=lambda submission_info: self.__format_runtime(submission_info['runtime']))
@@ -110,15 +116,14 @@ class Crawler:
 
     def __crawl_and_save_submission_info_as_file_by_list(self, submission_catalog):
         """
-        通过提交概览表将提交代码多线程下载下来并存到文件
-        1.下载
-        2.存到文件
+        开启多线程通过提交概览表将提交代码下载下来并存到文件
         :param submission_catalog: 提交答案概览 
         """
         threads = []
         for submission in submission_catalog[:]:
             submission_thread = threading.Thread(target=self.__crawl_and_save_submission_info_as_file_by_url,
-                                                 args=(submission['url'],))
+                                                 args=(submission['url'],)
+                                                 )
             threads.append(submission_thread)
         for t in threads:
             t.start()
@@ -131,9 +136,10 @@ class Crawler:
         """
         print(threading.current_thread(), "开始进程")
         self.__check_status_and_login()
+        #try:
         submission_page = self.session.get(self.SUBMISSION_PAGE_BASE_URL+submission_url)
-        print("请求返回码:", submission_page.status_code)
-        print('header:', self.session.headers)
+        #except :
+
         submission_code = self.__get_submission_code_from_page_source_code(submission_page.
                                                                            text.encode(submission_page.encoding).
                                                                            decode('utf-8'))
@@ -166,6 +172,12 @@ class Crawler:
             print(threading.current_thread(), '写入完成')
         finally:
             f.close()
+
+    class __Submission:
+        def __init__(self, submission_catalog):
+            self.title = submission_catalog['title']
+            self.question = None
+
 
 '''
 def get_submission_count_request_cookie():
