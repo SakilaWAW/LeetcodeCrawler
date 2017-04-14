@@ -1,7 +1,6 @@
 # -*- coding:utf-8 -*-
 import requests
 from bs4 import BeautifulSoup
-import time
 import re
 import threading
 import os
@@ -67,9 +66,9 @@ class Crawler:
                                          headers={'Referer': 'https://leetcode.com/accounts/login/'},
                                          data=login_msg,
                                          verify=False)
+            print('登录返回码:', response.status_code)
         except requests.exceptions.ConnectionError:
             print('request refused by server.')
-        print('登录返回码:', response.status_code)
 
     def __get_csrf_code_from_login_page(self):
         login_page = self.session.get(self.LOGIN_URL)
@@ -199,6 +198,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
