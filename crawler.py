@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 import re
 import threading
 import os
+import time
 
 """
 Q & A:
@@ -16,6 +17,8 @@ filter(lambda表达式)或者列表推导式来写会比较好.筛选条件复�
 4. 使用多线程的时候出现只能启动单子线程的情况,注意区分threading.join()和setDaemon()的用法!
 t1.join()<==>wait_until_finish(t1),会阻断当前程序,t1.setDaemon(True)意味着当前线程完成后,
 t1将被强制终止.
+5. 在使用多线程做requests请求的时候,请求速度太快可能会被网站认为是非法访问,用在线程开启后time.sleep()
+可以避免这个问题.
 
 TIPS:
 1. TrueOutput if Expression else falseOutput 三元表达式写法.
@@ -65,7 +68,7 @@ class Crawler:
             response = self.session.post(self.LOGIN_URL,
                                          headers={'Referer': 'https://leetcode.com/accounts/login/'},
                                          data=login_msg,
-                                         verify=False)
+                                         timeout=10)
             print('登录返回码:', response.status_code)
         except requests.exceptions.ConnectionError:
             print('request refused by server.')
@@ -119,6 +122,7 @@ class Crawler:
             threads.append(submission_thread)
         for t in threads:
             t.start()
+            time.sleep(0.2)
 
     def __crawl_and_save_submission_info_as_file_by_url(self, submission_url):
         """
@@ -127,9 +131,9 @@ class Crawler:
         """
         print(threading.current_thread(), "开始进程")
         self.__check_status_and_login()
-        submission_page = self.session.get(self.SUBMISSION_PAGE_BASE_URL+submission_url,
-                                           headers={'Referer': 'https://leetcode.com/submissions/'},
-                                           )
+        submission_page = self.session.get(self.SUBMISSION_PAGE_BASE_URL+submission_url)
+        print("请求返回码:", submission_page.status_code)
+        print('header:', self.session.headers)
         submission_code = self.__get_submission_code_from_page_source_code(submission_page.
                                                                            text.encode(submission_page.encoding).
                                                                            decode('utf-8'))
