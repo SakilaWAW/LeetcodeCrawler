@@ -207,7 +207,38 @@ class Crawler:
             """
             获取推荐答案 并保存
             """
-            pass
+            response_text = self.session.get('https://discuss.leetcode.com/topic/25004'
+                                             '/easy-concise-java-o-n-solution-with-proof-and-explanation/2').text
+            solution = re.search('<div class="content" component="post/content" itemprop="text">[\s\S]*?</div>',
+                                 response_text)
+            print(solution.group(0))
+
+'''
+solution source code:
+<div class="content" component="post/content" itemprop="text">
+			<p>AKA, the general idea to find some max is to go through all cases where max value can possibly occur and keep updating the max value. The efficiency of the scan depends on the size of cases you plan to scan.<br/>
+To increase efficiency, all we need to do is to find a smart way of scan to cut off the useless cases and meanwhile 100% guarantee the max value can be reached through the rest of cases.</p>
+<p>In this problem, the smart scan way is to set two pointers initialized at both ends of the array. Every time move the smaller value pointer to inner array. Then after the two pointers meet, all possible max cases have been scanned and the max situation is 100% reached somewhere in the scan. Following is a brief prove of this.</p>
+<p>Given a1,a2,a3.....an as input array. Lets assume a10 and a20 are the max area situation. We need to prove that a10 can be reached by left pointer and during the time left pointer stays at a10, a20 can be reached by right pointer. That is to say, the core problem is to prove: when left pointer is at a10 and right pointer is at a21, the next move must be right pointer to a20.</p>
+<p>Since we are always moving the pointer with the smaller value, i.e. if a10 &gt; a21, we should move pointer at a21 to a20, as we hope. Why a10 &gt;a21? Because if a21&gt;a10, then area of a10 and a20 must be less than area of a10 and a21. Because the area of a10 and a21 is at least height[a10] * (21-10) while the area of a10 and a20 is at most height[a10] * (20-10). So there is a contradiction of assumption a10 and a20 has the max area. So, a10 must be greater than a21, then next move a21 has to be move to a20. The max cases must be reached.</p>
+<pre><code>public int maxArea(int[] height) &#123;
+    int left = 0, right = height.length - 1;
+	int maxArea = 0;
+
+	while (left &lt; right) {
+		maxArea = Math.max(maxArea, Math.min(height[left], height[right])
+				* (right - left));
+		if (height[left] &lt; height[right])
+			left++;
+		else
+			right--;
+	&#125;
+
+	return maxArea;
+}</code></pre>
+
+		</div>
+'''
 
 '''
 def get_submission_count_request_cookie():
