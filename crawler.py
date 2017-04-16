@@ -183,16 +183,14 @@ class Crawler:
         def crawl_and_save_info(self):
             """
             通过提交代码信息爬所需信息并保存到对象
-            :param submission_info: 提交代码信息
-            :param session: 提交http请求的session
             """
-            self.__save_submission_code()
-            self.__save_recommend_solution()
+            self.__crawl_and_save_submission_code()
+            self.__crawl_and_save_recommend_solution()
 
-        def __save_submission_code_from_url(self):
+        def __crawl_and_save_submission_code(self):
             """
-             根据url获得已提交的代码 并保存
-             """
+            获取已提交的代码 并保存
+            """
             submission_page_code = self.session.get(self.SUBMISSION_PAGE_BASE_URL + self.submission_url).text
             code = re.search("submissionCode: '([\s\S]*)editCodeUrl:", submission_page_code)
             replace_dic = {"submissionCode: '": "",
@@ -205,7 +203,11 @@ class Crawler:
             submission_info = re.sub('}\',(\s)*?editCodeUrl:', '', submission_info)
             self.code = submission_info
 
-        
+        def __crawl_and_save_recommend_solution(self):
+            """
+            获取推荐答案 并保存
+            """
+            pass
 
 '''
 def get_submission_count_request_cookie():
