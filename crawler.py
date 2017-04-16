@@ -19,6 +19,7 @@ t1.join()<==>wait_until_finish(t1),会阻断当前程序,t1.setDaemon(True)意�
 t1将被强制终止.
 5. 在使用多线程做requests请求的时候,请求速度太快可能会被网站认为是非法访问,用在线程开启后time.sleep()
 可以避免这个问题.??可能??
+6. object is not subscriptable通常是运行时的操作与对象类型不符
 
 TIPS:
 1. TrueOutput if Expression else falseOutput 三元表达式写法.
@@ -37,11 +38,13 @@ class Crawler:
     SUBMISSIONS_DIR_URL = 'https://leetcode.com/submissions/'
     SUBMISSIONS_LIST_JSON_REQUEST_URL = 'https://leetcode.com/api/submissions/'
     SESSION_MANAGE_URL = 'https://leetcode.com/session/'
-    SUBMISSION_PAGE_BASE_URL = 'https://leetcode.com'
 
     TYPE_INCREAMENT = 0
     TYPE_FULL_SCALE = 1
 
+    LOGIN_HEADER = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                                  'Chrome/57.0.2987.133 Safari/537.36',
+                    'Referer': 'https://leetcode.com/accounts/login/'}
 
     ROOT_PATH = os.getcwd()
 
@@ -69,14 +72,11 @@ class Crawler:
                      'login': 'SakilaWAW',
                      'password': 'Greedisgood'
                      }
-        try:
-            response = self.session.post(self.LOGIN_URL,
-                                         headers={'Referer': 'https://leetcode.com/accounts/login/'},
-                                         data=login_msg,
-                                         timeout=10)
-            print('登录返回码:', response.status_code)
-        except requests.exceptions.ConnectionError:
-            print('request refused by server.')
+        response = self.session.post(self.LOGIN_URL,
+                                     headers=self.LOGIN_HEADER,
+                                     data=login_msg,
+                                     timeout=15)
+        print('登录返回码:', response.status_code)
 
     def __get_csrf_code_from_login_page(self):
         login_page = self.session.get(self.LOGIN_URL)
@@ -117,67 +117,95 @@ class Crawler:
     def __crawl_and_save_submission_info_as_file_by_list(self, submission_catalog):
         """
         开启多线程通过提交概览表将提交代码下载下来并存到文件
-        :param submission_catalog: 提交答案概览 
+        :param submission_catalog: 所有提交答案的概览 
         """
         threads = []
-        for submission in submission_catalog[:]:
-            submission_thread = threading.Thread(target=self.__crawl_and_save_submission_info_as_file_by_url,
-                                                 args=(submission['url'],)
+        for submission_info in submission_catalog[:]:
+            submission_thread = threading.Thread(target=self.__crawl_and_save_submission_as_file,
+                                                 args=(submission_info,)
                                                  )
             threads.append(submission_thread)
-        for t in threads:
-            t.start()
+        for thread in threads:
+            thread.start()
             time.sleep(0.2)
 
-    def __crawl_and_save_submission_info_as_file_by_url(self, submission_url):
+    def __crawl_and_save_submission_as_file(self, submission_info):
         """
         根据url获得代码并保存到文件
-        :param submission_url: 提交代码地址 
+        :param submission_info: 提交代码信息
         """
         print(threading.current_thread(), "开始进程")
         self.__check_status_and_login()
-        #try:
-        submission_page = self.session.get(self.SUBMISSION_PAGE_BASE_URL+submission_url)
-        #except :
+        submission = self.__Submission(self.session, submission_info)
+        submission.crawl_and_save_info()
+        self.__save_to_file(submission, threading.current_thread().name)
 
-        submission_code = self.__get_submission_code_from_page_source_code(submission_page.
-                                                                           text.encode(submission_page.encoding).
-                                                                           decode('utf-8'))
-        self.__save_submission_code_to_file(submission_code)
-
-    @staticmethod
-    def __get_submission_code_from_page_source_code(page_source_code):
-        """
-        从网页源码中获得已提交的代码
-        """
-        code = re.search("submissionCode: '([\s\S]*)editCodeUrl:", page_source_code)
-        replace_dic = {"submissionCode: '": "",
-                       r"\u000A": "\n", r"\u000D": "\r", r"\u0009": "\t", r"\u003D": "=",
-                       r"\u003B": ";", r"\u003C": "<", r"\u0026": "&", r"\u0027": "'",
-                       r"\u002D": "-", r"\u003E": ">", r"\u0022": "\"", r"\u005C": "\\"}
-        submission_info = code.group(0)
-        for key in replace_dic:
-            submission_info = submission_info.replace(key, replace_dic[key])
-        submission_info = re.sub('}\',(\s)*?editCodeUrl:', '', submission_info)
-        return submission_info
-
-    def __save_submission_code_to_file(self, submission_code):
+    def __save_to_file(self, submission, file_name):
         submission_file_dir = self.ROOT_PATH + '/.submission_files/'
         if not os.path.exists(submission_file_dir):
             os.mkdir(submission_file_dir)
-        file_name = submission_file_dir + threading.current_thread().name
-        f = open(file_name, 'w')
+        file_name = submission_file_dir + file_name
+        file = open(file_name, 'w')
         try:
-            f.write(submission_code)
+            file.write(submission.__str__())
             print(threading.current_thread(), '写入完成')
         finally:
-            f.close()
+            file.close()
 
     class __Submission:
-        def __init__(self, submission_catalog):
-            self.title = submission_catalog['title']
-            self.question = None
+        """
+        这个内部类的作用是保存提交代码的格式。
+        """
+        SUBMISSION_PAGE_BASE_URL = 'https://leetcode.com'
 
+        code = '暂无'
+        question = '暂无'
+        recommend_solution = '暂无'
+        title = '暂无'
+        language = '暂无'
+
+        def __init__(self, session, submission_info):
+            self.title = submission_info['title']
+            self.language = submission_info['lang']
+            self.session = session
+            self.submission_url = submission_info['url']
+
+        def __str__(self):
+            return '题目:\n' \
+                   + self.title + '\n' \
+                   + self.question + '\n' \
+                   + '使用语言:' + self.language + '\n' \
+                   + '代码:\n' \
+                   + self.code + '\n' \
+                   + '推荐答案:\n' \
+                   + self.recommend_solution
+
+        def crawl_and_save_info(self):
+            """
+            通过提交代码信息爬所需信息并保存到对象
+            :param submission_info: 提交代码信息
+            :param session: 提交http请求的session
+            """
+            self.__save_submission_code()
+            self.__save_recommend_solution()
+
+        def __save_submission_code_from_url(self):
+            """
+             根据url获得已提交的代码 并保存
+             """
+            submission_page_code = self.session.get(self.SUBMISSION_PAGE_BASE_URL + self.submission_url).text
+            code = re.search("submissionCode: '([\s\S]*)editCodeUrl:", submission_page_code)
+            replace_dic = {"submissionCode: '": "",
+                           r"\u000A": "\n", r"\u000D": "\r", r"\u0009": "\t", r"\u003D": "=",
+                           r"\u003B": ";", r"\u003C": "<", r"\u0026": "&", r"\u0027": "'",
+                           r"\u002D": "-", r"\u003E": ">", r"\u0022": "\"", r"\u005C": "\\"}
+            submission_info = code.group(0)
+            for key in replace_dic:
+                submission_info = submission_info.replace(key, replace_dic[key])
+            submission_info = re.sub('}\',(\s)*?editCodeUrl:', '', submission_info)
+            self.code = submission_info
+
+        
 
 '''
 def get_submission_count_request_cookie():
