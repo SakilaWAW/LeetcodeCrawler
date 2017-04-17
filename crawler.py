@@ -25,11 +25,14 @@ TIPS:
 1. TrueOutput if Expression else falseOutput 三元表达式写法.
 2. if __name__ == '__main__'的作用类似于main()函数,让文件可以单独调试,不至于被import就启动调试程序.
 3. __filter()中sort的用法,棒棒哒.
+4. 使用BeautifulSoup时可以适度的用lxml解析器代替html.parser,速度快而且可以用文档树的形式,很方便.使用tag.string还可以
+用对应编码直接输出文本,讲html的转义字符也一并转化了.
 
 TODO:
 1. post请求405问题
 2. 如何避免js中的特殊字符
 3. requests.exceptions.ConnectionError: HTTPSConnectionPool如何解决
+4. [Errno -3]未解决-疑似dns问题
 """
 
 
@@ -160,9 +163,10 @@ class Crawler:
 
         code = '暂无'
         question = '暂无'
-        recommend_solution = '暂无'
         title = '暂无'
         language = '暂无'
+        best_solution_text = '暂无'
+        best_solution_code = '暂无'
 
         def __init__(self, session, submission_info):
             self.title = submission_info['title']
@@ -178,18 +182,33 @@ class Crawler:
                    + '代码:\n' \
                    + self.code + '\n' \
                    + '推荐答案:\n' \
-                   + self.recommend_solution
+                   + self.best_solution_text + '\n' \
+                   + self.best_solution_code
 
         def crawl_and_save_info(self):
             """
-            通过提交代码信息爬所需信息并保存到对象
+            通过提交代码信息爬所需信息 并保存到对象
             """
             self.__crawl_and_save_submission_code()
-            self.__crawl_and_save_recommend_solution()
+            self.__crawl_and_save_question()
+            self.__crawl_and_save_best_solution()
+
+        def __crawl_and_save_question(self):
+            """
+            爬取题目 并保存到对象 
+            """
+            #通过观察得到每道题目solution的格式
+            target_url = 'https://leetcode.com/problems/'\
+                         + self.title.lower().replace(' ', '-') + '/#/solutions'
+            response_text = self.session.get(target_url).text
+            # 得到题目的cid,可以在提供的api接口中使用
+            cid_code_raw = re.search('data-notebbcid="[\d]+"', response_text).group(0)
+            cid_code = cid_code_raw.replace('data-notebbcid="', '').replace('"', '')
+            all_discuss_info_url = 'https://discuss.leetcode.com/api/category/' + str(cid_code)
 
         def __crawl_and_save_submission_code(self):
             """
-            获取已提交的代码 并保存
+            获取已提交的代码 并保存到对象
             """
             submission_page_code = self.session.get(self.SUBMISSION_PAGE_BASE_URL + self.submission_url).text
             code = re.search("submissionCode: '([\s\S]*)editCodeUrl:", submission_page_code)
@@ -203,21 +222,25 @@ class Crawler:
             submission_info = re.sub('}\',(\s)*?editCodeUrl:', '', submission_info)
             self.code = submission_info
 
-        def __crawl_and_save_recommend_solution(self):
+        def __crawl_and_save_best_solution(self):
             """
             获取推荐答案 并保存
             """
-            response_text = self.session.get('https://discuss.leetcode.com/topic/25004'
-                                             '/easy-concise-java-o-n-solution-with-proof-and-explanation/2').text
-            solution = re.search('<div class="content" component="post/content" itemprop="text">[\s\S]*?</div>',
-                                 response_text)
-            print(solution.group(0))
+            response_text = self.session.get('https://discuss.leetcode.com/topic/25004/'
+                                             'easy-concise-java-o-n-solution-with-proof-and-explanation/2').text
+            # <br/>标签会对soup解析造成干扰,先去掉
+            soup = BeautifulSoup(response_text.replace('<br/>', ''), 'lxml')
+            div_tag = soup.div
+            for s in div_tag.find_all('p'):
+                self.best_solution_text = self.best_solution_text + '  ' + s.string
+            self.best_solution_code = div_tag.pre.code.string
+
 
 '''
 solution source code:
 <div class="content" component="post/content" itemprop="text">
 			<p>AKA, the general idea to find some max is to go through all cases where max value can possibly occur and keep updating the max value. The efficiency of the scan depends on the size of cases you plan to scan.<br/>
-To increase efficiency, all we need to do is to find a smart way of scan to cut off the useless cases and meanwhile 100% guarantee the max value can be reached through the rest of cases.</p>
+To increase efficiency, all we need to do is to find a smart way of scan to cut off the useless cases and meanwhile 100% guarantee the max value can be reached through the rest of cases.<br/></p>
 <p>In this problem, the smart scan way is to set two pointers initialized at both ends of the array. Every time move the smaller value pointer to inner array. Then after the two pointers meet, all possible max cases have been scanned and the max situation is 100% reached somewhere in the scan. Following is a brief prove of this.</p>
 <p>Given a1,a2,a3.....an as input array. Lets assume a10 and a20 are the max area situation. We need to prove that a10 can be reached by left pointer and during the time left pointer stays at a10, a20 can be reached by right pointer. That is to say, the core problem is to prove: when left pointer is at a10 and right pointer is at a21, the next move must be right pointer to a20.</p>
 <p>Since we are always moving the pointer with the smaller value, i.e. if a10 &gt; a21, we should move pointer at a21 to a20, as we hope. Why a10 &gt;a21? Because if a21&gt;a10, then area of a10 and a20 must be less than area of a10 and a21. Because the area of a10 and a21 is at least height[a10] * (21-10) while the area of a10 and a20 is at most height[a10] * (20-10). So there is a contradiction of assumption a10 and a20 has the max area. So, a10 must be greater than a21, then next move a21 has to be move to a20. The max cases must be reached.</p>
@@ -268,10 +291,83 @@ def get_submission_count():
     print('count请求返回码:', submission_count_page.status_code)
 '''
 
+def parse():
+    html = '''
+<div class="content" component="post/content" itemprop="text">
+			<p>AKA, the general idea to find some max is to go through all cases where max value can possibly occur and keep updating the max value. The efficiency of the scan depends on the size of cases you plan to scan.<br/>
+To increase efficiency, all we need to do is to find a smart way of scan to cut off the useless cases and meanwhile 100% guarantee the max value can be reached through the rest of cases.</p>
+<p>In this problem, the smart scan way is to set two pointers initialized at both ends of the array. Every time move the smaller value pointer to inner array. Then after the two pointers meet, all possible max cases have been scanned and the max situation is 100% reached somewhere in the scan. Following is a brief prove of this.</p>
+<p>Given a1,a2,a3.....an as input array. Lets assume a10 and a20 are the max area situation. We need to prove that a10 can be reached by left pointer and during the time left pointer stays at a10, a20 can be reached by right pointer. That is to say, the core problem is to prove: when left pointer is at a10 and right pointer is at a21, the next move must be right pointer to a20.</p>
+<p>Since we are always moving the pointer with the smaller value, i.e. if a10 &gt; a21, we should move pointer at a21 to a20, as we hope. Why a10 &gt;a21? Because if a21&gt;a10, then area of a10 and a20 must be less than area of a10 and a21. Because the area of a10 and a21 is at least height[a10] * (21-10) while the area of a10 and a20 is at most height[a10] * (20-10). So there is a contradiction of assumption a10 and a20 has the max area. So, a10 must be greater than a21, then next move a21 has to be move to a20. The max cases must be reached.</p>
+<pre><code>public int maxArea(int[] height) &#123;
+    int left = 0, right = height.length - 1;
+	int maxArea = 0;
+
+	while (left &lt; right) {
+		maxArea = Math.max(maxArea, Math.min(height[left], height[right])
+				* (right - left));
+		if (height[left] &lt; height[right])
+			left++;
+		else
+			right--;
+	&#125;
+
+	return maxArea;
+}</code></pre>
+
+		</div>
+		<div>test</div>
+'''
+
+    text = html.replace('<br/>', '')
+    soup = BeautifulSoup(text, 'lxml')
+    div_tag = soup.div
+    for s in div_tag.find_all('p'):
+        print("  " + s.string)
+    print('-------------------------------------------------------')
+    print(div_tag.pre.code.string)
+
+
+def get_csrf_code_from_login_page(session):
+    login_header = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                                  'Chrome/57.0.2987.133 Safari/537.36',
+                    'Referer': 'https://leetcode.com/accounts/login/'}
+    login_page = session.get('https://leetcode.com/accounts/login/', headers=login_header)
+    soup = BeautifulSoup(login_page.text, 'html.parser')
+    return soup.input['value']
+
+
+def discuss_request_test(session):
+    login_msg = {'csrfmiddlewaretoken': get_csrf_code_from_login_page(session),
+                 'login': 'SakilaWAW',
+                 'password': 'Greedisgood'
+                 }
+    login_header = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                                  'Chrome/57.0.2987.133 Safari/537.36',
+                    'Referer': 'https://leetcode.com/accounts/login/'}
+    response = session.post('https://leetcode.com/accounts/login/',
+                            headers=login_header,
+                            data=login_msg,
+                            timeout=15)
+    print('登录返回码:', response.status_code)
+    url = 'https://discuss.leetcode.com/api/category/540'
+    header = {'Host': 'discuss.leetcode.com',
+              'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:52.0) Gecko/20100101 Firefox/52.0',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.5',
+              'Accept-Encoding': 'gzip, deflate, br',
+              'Connection': 'keep-alive',
+              'Pragma': 'no-cache',
+              'Cache-Control': 'no-cache'}
+    response_text = session.get(url, headers=header).text
+    print(response_text)
 
 def main():
-    crawler = Crawler()
-    crawler.get_all_submission()
+    session = requests.session()
+    discuss_request_test(session)
+    #parse()
+    #crawler = Crawler()
+    #crawler.get_all_submission()
 
 if __name__ == '__main__':
     main()
