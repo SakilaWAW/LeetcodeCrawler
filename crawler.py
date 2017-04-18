@@ -180,7 +180,7 @@ class Crawler:
             self.submission_url = submission_info['url']
 
         def __str__(self):
-            return '题目:\n' \
+            return '题目:' \
                    + self.question_title + '\n' \
                    + self.question_body + '\n' \
                    + '使用语言:' + self.submission_language + '\n' \
@@ -204,9 +204,10 @@ class Crawler:
             """
             # 通过观察得到每道题目solution的格式
             problem_url = 'https://leetcode.com/problems/' + self.question_slug_name + '/'
-            problem_page_html = self.session.get(problem_url).text
-            soup = BeautifulSoup(problem_page_html, 'lxml')
-            self.question_body = str(soup.find(attrs={"name": "description"})['content'])
+            problem_page = self.session.get(problem_url)
+            soup = BeautifulSoup(problem_page.text, 'lxml')
+            raw_question_body = soup.find(attrs={"name": "description"})['content']
+            self.question_body = html_parser_utils.HtmlParserUtils().unescape_html(raw_question_body)
 
         def __crawl_and_save_submission_code(self):
             """
@@ -356,10 +357,11 @@ def discuss_request_test(session):
 
 
 def crawl_question_test():
-    question_html = requests.get('https://leetcode.com/problems/fizz-buzz/#/solutions')
+    question_html = requests.get('https://leetcode.com/problems/compare-version-numbers/')
     soup = BeautifulSoup(question_html.text, 'lxml')
     text = soup.find(attrs={"name": "description"})['content']
-    print()
+    parser = html_parser_utils.HtmlParserUtils()
+    print(parser.unescape_html(text))
 
 
 def crawl_and_save_submission_code_test(session):
