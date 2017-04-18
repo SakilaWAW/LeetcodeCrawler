@@ -159,28 +159,31 @@ class Crawler:
         """
         这个内部类的作用是保存提交代码的格式。
         """
-        SUBMISSION_PAGE_BASE_URL = 'https://leetcode.com'
+        LEETCODE_BASE_URL = 'https://leetcode.com'
 
-        code = '暂无'
-        question = '暂无'
-        title = '暂无'
-        language = '暂无'
+        # 形如xxx-xxx-xxx的名字,在请求中会用到 e.g Fizz Buzz => fizz-buzz
+        question_slug_name = '暂无'
+        submission_code = '暂无'
+        question_body = '暂无'
+        question_title = '暂无'
+        submission_language = '暂无'
         best_solution_text = '暂无'
         best_solution_code = '暂无'
 
         def __init__(self, session, submission_info):
-            self.title = submission_info['title']
-            self.language = submission_info['lang']
+            self.question_title = submission_info['title']
+            self.question_slug_name = self.question_title.lower().replace(' ', '-')
+            self.submission_language = submission_info['lang']
             self.session = session
             self.submission_url = submission_info['url']
 
         def __str__(self):
             return '题目:\n' \
-                   + self.title + '\n' \
-                   + self.question + '\n' \
-                   + '使用语言:' + self.language + '\n' \
+                   + self.question_title + '\n' \
+                   + self.question_body + '\n' \
+                   + '使用语言:' + self.submission_language + '\n' \
                    + '代码:\n' \
-                   + self.code + '\n' \
+                   + self.submission_code + '\n' \
                    + '推荐答案:\n' \
                    + self.best_solution_text + '\n' \
                    + self.best_solution_code
@@ -191,26 +194,23 @@ class Crawler:
             """
             self.__crawl_and_save_submission_code()
             self.__crawl_and_save_question()
-            self.__crawl_and_save_best_solution()
+            # self.__crawl_and_save_best_solution()
 
         def __crawl_and_save_question(self):
             """
             爬取题目 并保存到对象 
             """
-            #通过观察得到每道题目solution的格式
-            target_url = 'https://leetcode.com/problems/'\
-                         + self.title.lower().replace(' ', '-') + '/#/solutions'
-            response_text = self.session.get(target_url).text
-            # 得到题目的cid,可以在提供的api接口中使用
-            cid_code_raw = re.search('data-notebbcid="[\d]+"', response_text).group(0)
-            cid_code = cid_code_raw.replace('data-notebbcid="', '').replace('"', '')
-            all_discuss_info_url = 'https://discuss.leetcode.com/api/category/' + str(cid_code)
+            # 通过观察得到每道题目solution的格式
+            problem_url = 'https://leetcode.com/problems/' + self.question_slug_name + '/'
+            problem_page_html = self.session.get(problem_url).text
+            soup = BeautifulSoup(problem_page_html, 'lxml')
+            self.question_body = soup.find(attrs={"name": "description"})['content']
 
         def __crawl_and_save_submission_code(self):
             """
             获取已提交的代码 并保存到对象
             """
-            submission_page_code = self.session.get(self.SUBMISSION_PAGE_BASE_URL + self.submission_url).text
+            submission_page_code = self.session.get(self.LEETCODE_BASE_URL + self.submission_url).text
             code = re.search("submissionCode: '([\s\S]*)editCodeUrl:", submission_page_code)
             replace_dic = {"submissionCode: '": "",
                            r"\u000A": "\n", r"\u000D": "\r", r"\u0009": "\t", r"\u003D": "=",
@@ -220,7 +220,7 @@ class Crawler:
             for key in replace_dic:
                 submission_info = submission_info.replace(key, replace_dic[key])
             submission_info = re.sub('}\',(\s)*?editCodeUrl:', '', submission_info)
-            self.code = submission_info
+            self.submission_code = submission_info
 
         def __crawl_and_save_best_solution(self):
             """
@@ -342,6 +342,7 @@ def discuss_request_test(session):
                  'login': 'SakilaWAW',
                  'password': 'Greedisgood'
                  }
+    '''
     login_header = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
                                   'Chrome/57.0.2987.133 Safari/537.36',
                     'Referer': 'https://leetcode.com/accounts/login/'}
@@ -349,25 +350,26 @@ def discuss_request_test(session):
                             headers=login_header,
                             data=login_msg,
                             timeout=15)
-    print('登录返回码:', response.status_code)
-    url = 'https://discuss.leetcode.com/api/category/540'
-    header = {'Host': 'discuss.leetcode.com',
-              'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:52.0) Gecko/20100101 Firefox/52.0',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-              'Accept-Language': 'en-US,en;q=0.5',
-              'Accept-Encoding': 'gzip, deflate, br',
-              'Connection': 'keep-alive',
-              'Pragma': 'no-cache',
-              'Cache-Control': 'no-cache'}
-    response_text = session.get(url, headers=header).text
-    print(response_text)
+    print('登录返回码:', response.status_code)'''
+    all_discuss_info_api_url = 'https://discuss.leetcode.com/api/category/540'
+    all_discuss_json = session.get(all_discuss_info_api_url).json()
+    info_html = all_discuss_json['topics'][0]['teaser']['content']
+    soup = BeautifulSoup(info_html, 'lxml')
+    print(soup)
+
+
+def crawl_question_test():
+    question_html = requests.get('https://leetcode.com/problems/fizz-buzz/#/solutions').text
+    soup = BeautifulSoup(question_html, 'lxml')
+    print(soup.find(attrs={"name": "description"})['content'])
 
 def main():
-    session = requests.session()
-    discuss_request_test(session)
+    #crawl_question_test()
+    #session = requests.session()
+    #discuss_request_test(session)
     #parse()
-    #crawler = Crawler()
-    #crawler.get_all_submission()
+    crawler = Crawler()
+    crawler.get_all_submission()
 
 if __name__ == '__main__':
     main()
