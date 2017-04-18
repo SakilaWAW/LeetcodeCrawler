@@ -196,7 +196,7 @@ class Crawler:
             """
             self.__crawl_and_save_submission_code()
             self.__crawl_and_save_question()
-            # self.__crawl_and_save_best_solution()
+            self.__crawl_and_save_best_solution()
 
         def __crawl_and_save_question(self):
             """
@@ -225,7 +225,7 @@ class Crawler:
             获取推荐答案 并保存
             """
             response_text = self.session.get('https://discuss.leetcode.com/topic/25004/'
-                                             'easy-concise-java-o-n-solution-with-proof-and-explanation/2').text
+                                             'easy-concise-java-o-n-solution-with-proof-and-explanation/').text
             # <br/>标签会对soup解析造成干扰,先去掉
             soup = BeautifulSoup(response_text.replace('<br/>', ''), 'lxml')
             div_tag = soup.div
