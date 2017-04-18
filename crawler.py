@@ -5,6 +5,7 @@ import re
 import threading
 import os
 import time
+import html_parser_utils
 
 """
 Q & A:
@@ -20,6 +21,7 @@ t1将被强制终止.
 5. 在使用多线程做requests请求的时候,请求速度太快可能会被网站认为是非法访问,用在线程开启后time.sleep()
 可以避免这个问题.??可能??
 6. object is not subscriptable通常是运行时的操作与对象类型不符
+7. BeautifulSoup中的编码问题使用时有可能会取到包含html转义字符的字符串,可以用内置函数str()来制定编码类型取得.
 
 TIPS:
 1. TrueOutput if Expression else falseOutput 三元表达式写法.
@@ -87,7 +89,7 @@ class Crawler:
         return soup.input['value']
 
     def __get_submission_catalog(self):
-        payload = {'offset': 0, 'limit': 100}
+        payload = {'offset': 0, 'limit': 9999}
         submission_dir_page = self.session.get(self.SUBMISSIONS_LIST_JSON_REQUEST_URL, params=payload)
         print(submission_dir_page.text)
         return eval(submission_dir_page.text.replace('true', 'True').replace('false', 'False'))['submissions_dump']
@@ -204,23 +206,18 @@ class Crawler:
             problem_url = 'https://leetcode.com/problems/' + self.question_slug_name + '/'
             problem_page_html = self.session.get(problem_url).text
             soup = BeautifulSoup(problem_page_html, 'lxml')
-            self.question_body = soup.find(attrs={"name": "description"})['content']
+            self.question_body = str(soup.find(attrs={"name": "description"})['content'])
 
         def __crawl_and_save_submission_code(self):
             """
             获取已提交的代码 并保存到对象
             """
             submission_page_code = self.session.get(self.LEETCODE_BASE_URL + self.submission_url).text
-            code = re.search("submissionCode: '([\s\S]*)editCodeUrl:", submission_page_code)
-            replace_dic = {"submissionCode: '": "",
-                           r"\u000A": "\n", r"\u000D": "\r", r"\u0009": "\t", r"\u003D": "=",
-                           r"\u003B": ";", r"\u003C": "<", r"\u0026": "&", r"\u0027": "'",
-                           r"\u002D": "-", r"\u003E": ">", r"\u0022": "\"", r"\u005C": "\\"}
-            submission_info = code.group(0)
-            for key in replace_dic:
-                submission_info = submission_info.replace(key, replace_dic[key])
-            submission_info = re.sub('}\',(\s)*?editCodeUrl:', '', submission_info)
-            self.submission_code = submission_info
+            submission_info = re.search("submissionCode: '([\s\S]*)editCodeUrl:", submission_page_code).group(0)
+            submission_info = re.sub('\',(\s)*?editCodeUrl:', '', submission_info)
+            submission_info = submission_info.replace("submissionCode: '", "")
+            parser = html_parser_utils.HtmlParserUtils()
+            self.submission_code = parser.unescape_js(submission_info)
 
         def __crawl_and_save_best_solution(self):
             """
@@ -359,15 +356,40 @@ def discuss_request_test(session):
 
 
 def crawl_question_test():
-    question_html = requests.get('https://leetcode.com/problems/fizz-buzz/#/solutions').text
-    soup = BeautifulSoup(question_html, 'lxml')
-    print(soup.find(attrs={"name": "description"})['content'])
+    question_html = requests.get('https://leetcode.com/problems/fizz-buzz/#/solutions')
+    soup = BeautifulSoup(question_html.text, 'lxml')
+    text = soup.find(attrs={"name": "description"})['content']
+    print()
+
+
+def crawl_and_save_submission_code_test(session):
+    login_msg = {'csrfmiddlewaretoken': get_csrf_code_from_login_page(session),
+                 'login': 'SakilaWAW',
+                 'password': 'Greedisgood'
+                 }
+    login_header = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                                  'Chrome/57.0.2987.133 Safari/537.36',
+                    'Referer': 'https://leetcode.com/accounts/login/'}
+    response = session.post('https://leetcode.com/accounts/login/',
+                            headers=login_header,
+                            data=login_msg,
+                            timeout=15)
+    print('登录返回码:', response.status_code)
+    submission_page_code = session.get("https://www.leetcode.com/submissions/" + 'detail/99989050/').text
+    code = re.search("submissionCode: '([\s\S]*)editCodeUrl:", submission_page_code)
+    parser = html_parser_utils.HtmlParserUtils()
+    submission_info = code.group(0)
+    submission_info = re.sub('\',(\s)*?editCodeUrl:', '', submission_info)
+    submission_info = submission_info.replace("submissionCode: '", "")
+    print(parser.unescape_js(submission_info))
+
 
 def main():
-    #crawl_question_test()
-    #session = requests.session()
-    #discuss_request_test(session)
-    #parse()
+    # crawl_question_test()
+    # session = requests.session()
+    # crawl_and_save_submission_code_test(session)
+    # discuss_request_test(session)
+    # parse()
     crawler = Crawler()
     crawler.get_all_submission()
 
