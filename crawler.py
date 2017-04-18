@@ -21,7 +21,7 @@ t1将被强制终止.
 5. 在使用多线程做requests请求的时候,请求速度太快可能会被网站认为是非法访问,用在线程开启后time.sleep()
 可以避免这个问题.??可能??
 6. object is not subscriptable通常是运行时的操作与对象类型不符
-7. BeautifulSoup中的编码问题使用时有可能会取到包含html转义字符的字符串,可以用内置函数str()来制定编码类型取得.
+7. 在爬取html的过程中,会遇到很多转义字符,比如html转义字符,js转义字符,目前没有很好的办法,只能依次替换.
 
 TIPS:
 1. TrueOutput if Expression else falseOutput 三元表达式写法.
