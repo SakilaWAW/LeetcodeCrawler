@@ -22,6 +22,8 @@ t1将被强制终止.
 可以避免这个问题.??可能??
 6. object is not subscriptable通常是运行时的操作与对象类型不符
 7. 在爬取html的过程中,会遇到很多转义字符,比如html转义字符,js转义字符,目前没有很好的办法,只能依次替换.
+8. [Errno -3],系统dns配置问题,ubuntu16.04不能在设置里面配置,要在/etc/network/interfaces中添加形如dns-nameservers 8.8.8.8的dns.
+9. Comparison with None performed with equality operators 和None比较的话一定是is或者is not.
 
 TIPS:
 1. TrueOutput if Expression else falseOutput 三元表达式写法.
@@ -29,12 +31,13 @@ TIPS:
 3. __filter()中sort的用法,棒棒哒.
 4. 使用BeautifulSoup时可以适度的用lxml解析器代替html.parser,速度快而且可以用文档树的形式,很方便.使用tag.string还可以
 用对应编码直接输出文本,讲html的转义字符也一并转化了.
+5. 很多类似代码的文本常被存在html页面head中的meta节点里,可以直接取得.
+6. python中可以使用for,break,和else的配合来表达如果在for中没有break就做一件事的逻辑,很实用.
 
 TODO:
 1. post请求405问题
 2. 如何避免js中的特殊字符
 3. requests.exceptions.ConnectionError: HTTPSConnectionPool如何解决
-4. [Errno -3]未解决-疑似dns问题
 """
 
 
@@ -162,6 +165,7 @@ class Crawler:
         这个内部类的作用是保存提交代码的格式。
         """
         LEETCODE_BASE_URL = 'https://leetcode.com'
+        DISCUSS_BASE_URL = 'https://discuss.leetcode.com/'
 
         # 形如xxx-xxx-xxx的名字,在请求中会用到 e.g Fizz Buzz => fizz-buzz
         question_slug_name = '暂无'
@@ -169,8 +173,8 @@ class Crawler:
         question_body = '暂无'
         question_title = '暂无'
         submission_language = '暂无'
-        best_solution_text = '暂无'
-        best_solution_code = '暂无'
+        best_solution_url = '暂无'
+        _discuss_site_url = '暂无'
 
         def __init__(self, session, submission_info):
             self.question_title = submission_info['title']
@@ -186,54 +190,62 @@ class Crawler:
                    + '使用语言:' + self.submission_language + '\n' \
                    + '代码:\n' \
                    + self.submission_code + '\n' \
-                   + '推荐答案:\n' \
-                   + self.best_solution_text + '\n' \
-                   + self.best_solution_code
+                   + '推荐答案url: ' + self.best_solution_url
 
         def crawl_and_save_info(self):
             """
             通过提交代码信息爬所需信息 并保存到对象
             """
             self.__crawl_and_save_submission_code()
-            self.__crawl_and_save_question()
-            self.__crawl_and_save_best_solution()
+            self.__crawl_and_save_question_info()
+            self.__crawl_and_save_best_solution_url_in_needed_language()
 
-        def __crawl_and_save_question(self):
+        def __crawl_and_save_question_info(self):
             """
-            爬取题目 并保存到对象 
+            爬取题目 同时为了下面爬取最佳答案不再重复请求url 记录下最佳答案论坛的url 并保存到对象 
             """
             # 通过观察得到每道题目solution的格式
-            problem_url = 'https://leetcode.com/problems/' + self.question_slug_name + '/'
-            problem_page = self.session.get(problem_url)
+            problem_page = self.session.get('https://leetcode.com/problems/' + self.question_slug_name + '/')
             soup = BeautifulSoup(problem_page.text, 'lxml')
-            raw_question_body = soup.find(attrs={"name": "description"})['content']
+            self.__save_question_from_problem_page(soup)
+            self.__save_discuss_site_url_from_problem_page(soup)
+
+        def __save_question_from_problem_page(self, problem_page_soup):
+            raw_question_body = problem_page_soup.find(attrs={"name": "description"})['content']
             self.question_body = html_parser_utils.HtmlParserUtils().unescape_html(raw_question_body)
+
+        def __save_discuss_site_url_from_problem_page(self, problem_page_soup):
+            section_tag = problem_page_soup.find('section', class_='action col-md-12')
+            self._discuss_site_url = section_tag.a['href']
 
         def __crawl_and_save_submission_code(self):
             """
             获取已提交的代码 并保存到对象
             """
-            submission_page_code = self.session.get(self.LEETCODE_BASE_URL + self.submission_url).text
-            submission_info = re.search("submissionCode: '([\s\S]*)editCodeUrl:", submission_page_code).group(0)
+            submission_page = self.session.get(self.LEETCODE_BASE_URL + self.submission_url)
+            submission_info = re.search("submissionCode: '([\s\S]*)editCodeUrl:", submission_page.text).group(0)
             submission_info = re.sub('\',(\s)*?editCodeUrl:', '', submission_info)
             submission_info = submission_info.replace("submissionCode: '", "")
             parser = html_parser_utils.HtmlParserUtils()
             self.submission_code = parser.unescape_js(submission_info)
 
-        def __crawl_and_save_best_solution(self):
+        def __crawl_and_save_best_solution_url_in_needed_language(self):
             """
-            获取推荐答案 并保存
+            获取推荐答案url 并保存 
             """
-            response_text = self.session.get('https://discuss.leetcode.com/topic/25004/'
-                                             'easy-concise-java-o-n-solution-with-proof-and-explanation/').text
-            # <br/>标签会对soup解析造成干扰,先去掉
-            soup = BeautifulSoup(response_text.replace('<br/>', ''), 'lxml')
-            div_tag = soup.div
-            for s in div_tag.find_all('p'):
-                self.best_solution_text = self.best_solution_text + '  ' + s.string
-            self.best_solution_code = div_tag.pre.code.string
-
-
+            discuss_page = self.session.get(self._discuss_site_url)
+            soup = BeautifulSoup(discuss_page.text, 'lxml')
+            # find top voted answer in submission language
+            for solution_tag in soup.body.find_all('li', attrs={'component': 'category/topic'}):
+                title = solution_tag.meta['content']
+                if re.search(self.submission_language, title.lower()) is not None:
+                    related_solution_url = solution_tag.find('div', class_='col-md-6 col-sm-9 col-xs-10 content')\
+                        .find('h2', class_='title').a['href']
+                    self.best_solution_url = self.DISCUSS_BASE_URL + related_solution_url
+                    break
+            else:
+                self.best_solution_url = 'Sorry, no best solution matches yet!'
+            print(self.best_solution_url)
 '''
 solution source code:
 <div class="content" component="post/content" itemprop="text">
@@ -386,7 +398,13 @@ def crawl_and_save_submission_code_test(session):
     print(parser.unescape_js(submission_info))
 
 
+def crawl_best_solution_test():
+    submission = Crawler.Submission(requests.session(), 'java')
+    submission.crawl_and_save_info()
+
+
 def main():
+    # crawl_best_solution_test()
     # crawl_question_test()
     # session = requests.session()
     # crawl_and_save_submission_code_test(session)
