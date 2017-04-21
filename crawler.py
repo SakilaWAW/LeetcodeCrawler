@@ -24,6 +24,7 @@ t1将被强制终止.
 7. 在爬取html的过程中,会遇到很多转义字符,比如html转义字符,js转义字符,目前没有很好的办法,只能依次替换.
 8. [Errno -3],系统dns配置问题,ubuntu16.04不能在设置里面配置,要在/etc/network/interfaces中添加形如dns-nameservers 8.8.8.8的dns.
 9. Comparison with None performed with equality operators 和None比较的话一定是is或者is not.
+10. 在获取一道题的题目地址时获取不到,这是由于业务逻辑上有问题,带()的题目化成的url名字,由于因为url中不能包含括号所以要把()去掉.
 
 TIPS:
 1. TrueOutput if Expression else falseOutput 三元表达式写法.
@@ -38,6 +39,7 @@ TODO:
 1. post请求405问题
 2. 如何避免js中的特殊字符
 3. requests.exceptions.ConnectionError: HTTPSConnectionPool如何解决
+4. ssl.SSLEOFError: EOF occurred in violation of protocol (_ssl.c:645)?
 """
 
 
@@ -94,7 +96,6 @@ class Crawler:
     def __get_submission_catalog(self):
         payload = {'offset': 0, 'limit': 9999}
         submission_dir_page = self.session.get(self.SUBMISSIONS_LIST_JSON_REQUEST_URL, params=payload)
-        print(submission_dir_page.text)
         return eval(submission_dir_page.text.replace('true', 'True').replace('false', 'False'))['submissions_dump']
 
     def __filter(self, submission_list):
@@ -142,7 +143,6 @@ class Crawler:
         根据url获得代码并保存到文件
         :param submission_info: 提交代码信息
         """
-        print(threading.current_thread(), "开始进程")
         self.__check_status_and_login()
         submission = self.__Submission(self.session, submission_info)
         submission.crawl_and_save_info()
@@ -156,7 +156,7 @@ class Crawler:
         file = open(file_name, 'w')
         try:
             file.write(submission.__str__())
-            print(threading.current_thread(), '写入完成')
+            print(submission.question_title, '爬取完成')
         finally:
             file.close()
 
@@ -178,7 +178,8 @@ class Crawler:
 
         def __init__(self, session, submission_info):
             self.question_title = submission_info['title']
-            self.question_slug_name = self.question_title.lower().replace(' ', '-')
+            self.question_slug_name = self.question_title.lower().replace(' ', '-')\
+                .replace('(', '').replace(')', '')
             self.submission_language = submission_info['lang']
             self.session = session
             self.submission_url = submission_info['url']
@@ -245,7 +246,6 @@ class Crawler:
                     break
             else:
                 self.best_solution_url = 'Sorry, no best solution matches yet!'
-            print(self.best_solution_url)
 '''
 solution source code:
 <div class="content" component="post/content" itemprop="text">
