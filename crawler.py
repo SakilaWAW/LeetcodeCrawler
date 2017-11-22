@@ -80,7 +80,7 @@ class Crawler:
         """模拟登录,结果就是session对象中存有cookie"""
         login_msg = {'csrfmiddlewaretoken': self.__get_csrf_code_from_login_page(),
                      'login': 'SakilaWAW',
-                     'password': '*****'
+                     'password': '******'
                      }
         response = self.session.post(self.LOGIN_URL,
                                      headers=self.LOGIN_HEADER,
