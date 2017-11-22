@@ -80,7 +80,7 @@ class Crawler:
         """模拟登录,结果就是session对象中存有cookie"""
         login_msg = {'csrfmiddlewaretoken': self.__get_csrf_code_from_login_page(),
                      'login': 'SakilaWAW',
-                     'password': 'Greedisgood'
+                     'password': '*****'
                      }
         response = self.session.post(self.LOGIN_URL,
                                      headers=self.LOGIN_HEADER,
@@ -126,7 +126,7 @@ class Crawler:
     def __crawl_and_save_submission_info_as_file_by_list(self, submission_catalog):
         """
         开启多线程通过提交概览表将提交代码下载下来并存到文件
-        :param submission_catalog: 所有提交答案的概览 
+        :param submission_catalog: 所有提交答案的概览
         """
         threads = []
         for submission_info in submission_catalog[:]:
@@ -203,7 +203,7 @@ class Crawler:
 
         def __crawl_and_save_question_info(self):
             """
-            爬取题目 同时为了下面爬取最佳答案不再重复请求url 记录下最佳答案论坛的url 并保存到对象 
+            爬取题目 同时为了下面爬取最佳答案不再重复请求url 记录下最佳答案论坛的url 并保存到对象
             """
             # 通过观察得到每道题目solution的格式
             problem_page = self.session.get('https://leetcode.com/problems/' + self.question_slug_name + '/')
@@ -232,7 +232,7 @@ class Crawler:
 
         def __crawl_and_save_best_solution_url_in_needed_language(self):
             """
-            获取推荐答案url 并保存 
+            获取推荐答案url 并保存
             """
             discuss_page = self.session.get(self._discuss_site_url)
             soup = BeautifulSoup(discuss_page.text, 'lxml')
@@ -251,6 +251,7 @@ class Crawler:
 def main():
     crawler = Crawler()
     crawler.get_all_submission()
+
 
 if __name__ == '__main__':
     main()
