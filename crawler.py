@@ -22,16 +22,18 @@ t1将被强制终止.
 可以避免这个问题.??可能??
 6. object is not subscriptable通常是运行时的操作与对象类型不符
 7. 在爬取html的过程中,会遇到很多转义字符,比如html转义字符,js转义字符,目前没有很好的办法,只能依次替换.
-8. [Errno -3],系统dns配置问题,ubuntu16.04不能在设置里面配置,要在/etc/network/interfaces中添加形如dns-nameservers 8.8.8.8的dns.
-9. Comparison with None performed with equality operators 和None比较的话一定是is或者is not.
+8. [Errno -3],系统dns配置问题,ubuntu16.04不能在设置里面配置,要在
+/etc/network/interfaces中添加形如dns-nameservers 8.8.8.8的dns.
+9. Comparison with None performed with equality operators 和None比较的话一定是is或
+者is not.
 10. 在获取一道题的题目地址时获取不到,这是由于业务逻辑上有问题,带()的题目化成的url名字,由于因为url中不能包含括号所以要把()去掉.
 
 TIPS:
 1. TrueOutput if Expression else falseOutput 三元表达式写法.
 2. if __name__ == '__main__'的作用类似于main()函数,让文件可以单独调试,不至于被import就启动调试程序.
 3. __filter()中sort的用法,棒棒哒.
-4. 使用BeautifulSoup时可以适度的用lxml解析器代替html.parser,速度快而且可以用文档树的形式,很方便.使用tag.string还可以
-用对应编码直接输出文本,讲html的转义字符也一并转化了.
+4. 使用BeautifulSoup时可以适度的用lxml解析器代替html.parser,速度快而且可以用文档树的形式,很方便.使用tag.string还
+可以用对应编码直接输出文本,讲html的转义字符也一并转化了.
 5. 很多类似代码的文本常被存在html页面head中的meta节点里,可以直接取得.
 6. python中可以使用for,break,和else的配合来表达如果在for中没有break就做一件事的逻辑,很实用.
 
@@ -52,7 +54,8 @@ class Crawler:
     TYPE_INCREAMENT = 0
     TYPE_FULL_SCALE = 1
 
-    LOGIN_HEADER = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
+    LOGIN_HEADER = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) '
+                                  'AppleWebKit/537.36 (KHTML, like Gecko) '
                                   'Chrome/57.0.2987.133 Safari/537.36',
                     'Referer': 'https://leetcode.com/accounts/login/'}
 
